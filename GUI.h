@@ -23,6 +23,7 @@ static LRESULT CALLBACK _proc(HWND h, UINT m, WPARAM wp, LPARAM lp) {
     if (m == WM_DESTROY) PostQuitMessage(0);
     return DefWindowProc(h, m, wp, lp);
 }
+/*
 static void gradcolor(int R, int G, int B) {
     _gradColor = RGB(R,G,B);
     _useGrad = true;
@@ -36,6 +37,25 @@ static void width(int w) {
 }
 static void background() {
     _bgColor = _penColor;
+}
+*/
+
+// 修改：将 color 扩展为可选地同时设置为背景颜色，删除独立 background() API
+static void gradcolor(int R, int G, int B) {
+    _gradColor = RGB(R,G,B);
+    _useGrad = true;
+}
+
+static void color(int R, int G, int B, bool setAsBackground = false) {
+    _penColor = RGB(R,G,B);
+    if (setAsBackground) {
+        _bgColor = _penColor;
+    }
+    _applyPen();
+}
+
+static void width(int w) {
+    _lineWidth = w;
 }
 
 static void line(int x1,int y1,int x2,int y2) {
