@@ -19,30 +19,24 @@ static void _applyPen() {
     _pen = CreatePen(PS_SOLID, _lineWidth, _penColor);
     SelectObject(_hdc, _pen);
 }
-
 static LRESULT CALLBACK _proc(HWND h, UINT m, WPARAM wp, LPARAM lp) {
     if (m == WM_DESTROY) PostQuitMessage(0);
     return DefWindowProc(h, m, wp, lp);
 }
-
-// 统一极简 API：color(R, G, B, setBackground = false)
+static void gradcolor(int R, int G, int B) {
+    _gradColor = RGB(R,G,B);
+    _useGrad = true;
+}
 static void color(int R, int G, int B, bool setBackground = false) {
-    _penColor = RGB(R, G, B);
+    _penColor = RGB(R,G,B);
     if (setBackground) {
         _bgColor = _penColor;
     }
     _applyPen();
 }
-
-static void gradcolor(int R, int G, int B) {
-    _gradColor = RGB(R, G, B);
-    _useGrad = true;
-}
-
 static void width(int w) {
     _lineWidth = w;
 }
-
 static void line(int x1,int y1,int x2,int y2) {
     _applyPen();
     MoveToEx(_hdc,x1,y1,0);
@@ -64,18 +58,43 @@ static void bend(int x1,int y1,int x2,int y2,int x3,int y3) {
     }
 }
 
+// 文本：优先使用 "Microsoft YaHei"，若系统无该字体则回退到 DEFAULT_GUI_FONT
 static void text(int x, int y, const wchar_t* s, int size = 16) {
-    HFONT hFont = CreateFont(size, 0, 0, 0, FW_NORMAL, 0, 0, 0,
-                            DEFAULT_CHARSET, 0, 0, DEFAULT_QUALITY, 0,
-                            L"Microsoft YaHei");
-    HFONT oldFont = (HFONT)SelectObject(_hdc, hFont);
-    SetTextColor(_hdc, _penColor);
-    SetBkMode(_hdc, TRANSPARENT);
-    TextOut(_hdc, x, y, s, (int)wcslen(s));
-    SelectObject(_hdc, oldFont);
-    DeleteObject(hFont);
-}
+    LOGFONTW lf = {0};
+    lf.lfHeight = size;
+    lf.lfWeight = FW_NORMAL;
+    lf.lfCharSet = DEFAULT_CHARSET;
+    lf.lfQuality = DEFAULT_QUALITY;
+    wcscpy_s(lf.lfFaceName, L"Microsoft YaHei");
 
+    HFONT hTry = CreateFontIndirectW(&lf);
+    // 先选入设备上下文，查询实际被选中的字族名，以判断系统是否支持该字体
+    HFONT hOld = (HFONT)SelectObject(_hdc, hTry);
+    wchar_t face[LF_FACESIZE] = {0};
+    GetTextFaceW(_hdc, LF_FACESIZE, face);
+    bool haveYaHei = (_wcsicmp(face, L"Microsoft YaHei") == 0 || _wcsicmp(face, L"Microsoft YaHei UI") == 0);
+    // 恢复之前的字体
+    SelectObject(_hdc, hOld);
+
+    if (haveYaHei) {
+        // 使用我们创建的字体
+        HFONT hUse = (HFONT)SelectObject(_hdc, hTry);
+        SetTextColor(_hdc, _penColor);
+        SetBkMode(_hdc, TRANSPARENT);
+        TextOutW(_hdc, x, y, s, (int)wcslen(s));
+        SelectObject(_hdc, hUse);
+        DeleteObject(hTry);
+    } else {
+        // 没有微软雅黑，释放尝试的字体，使用系统默认 GUI 字体
+        DeleteObject(hTry);
+        HFONT def = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
+        HFONT prev = (HFONT)SelectObject(_hdc, def);
+        SetTextColor(_hdc, _penColor);
+        SetBkMode(_hdc, TRANSPARENT);
+        TextOutW(_hdc, x, y, s, (int)wcslen(s));
+        SelectObject(_hdc, prev);
+    }
+}
 static void window(int w, int h, const wchar_t* title, void (*draw)()) {
     WNDCLASS wc = {0};
     wc.lpfnWndProc = _proc;
@@ -138,28 +157,24 @@ static void fullrect(int x1,int y1,int x2,int y2) {
         DeleteObject(b);
     }
 }
-
 static int mousex() {
     POINT p;
     GetCursorPos(&p);
     ScreenToClient(_hwnd, &p);
     return p.x;
 }
-
 static int mousey() {
     POINT p;
     GetCursorPos(&p);
     ScreenToClient(_hwnd, &p);
     return p.y;
 }
-
 static void circle(int x, int y, int r) {
     _applyPen();
     HBRUSH old = (HBRUSH)SelectObject(_hdc, GetStockObject(NULL_BRUSH));
     Ellipse(_hdc, x - r, y - r, x + r, y + r);
     SelectObject(_hdc, old);
 }
-
 static void fullcircle(int x, int y, int r) {
     if (!_useGrad) {
         _applyPen();
@@ -183,15 +198,12 @@ static void fullcircle(int x, int y, int r) {
         DeleteObject(b);
     }
 }
-
 static void nograd() {
     _useGrad = false;
 }
-
 static bool mousedown() {
     return GetAsyncKeyState(VK_LBUTTON) & 0x8000;
 }
-
 // 油漆桶填充：从(x,y)开始，把相连同色区域填成当前 color 颜色
 static void fill(int x, int y) {
     COLORREF target = GetPixel(_hdc, x, y);
