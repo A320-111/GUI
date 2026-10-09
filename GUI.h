@@ -19,39 +19,24 @@ static void _applyPen() {
     _pen = CreatePen(PS_SOLID, _lineWidth, _penColor);
     SelectObject(_hdc, _pen);
 }
+
 static LRESULT CALLBACK _proc(HWND h, UINT m, WPARAM wp, LPARAM lp) {
     if (m == WM_DESTROY) PostQuitMessage(0);
     return DefWindowProc(h, m, wp, lp);
 }
-/*
-static void gradcolor(int R, int G, int B) {
-    _gradColor = RGB(R,G,B);
-    _useGrad = true;
-}
-static void color(int R, int G, int B) {
-    _penColor = RGB(R,G,B);
-    _applyPen();
-}
-static void width(int w) {
-    _lineWidth = w;
-}
-static void background() {
-    _bgColor = _penColor;
-}
-*/
 
-// 修改：将 color 扩展为可选地同时设置为背景颜色，删除独立 background() API
-static void gradcolor(int R, int G, int B) {
-    _gradColor = RGB(R,G,B);
-    _useGrad = true;
-}
-
-static void color(int R, int G, int B, bool setAsBackground = false) {
-    _penColor = RGB(R,G,B);
-    if (setAsBackground) {
+// 统一极简 API：color(R, G, B, setBackground = false)
+static void color(int R, int G, int B, bool setBackground = false) {
+    _penColor = RGB(R, G, B);
+    if (setBackground) {
         _bgColor = _penColor;
     }
     _applyPen();
+}
+
+static void gradcolor(int R, int G, int B) {
+    _gradColor = RGB(R, G, B);
+    _useGrad = true;
 }
 
 static void width(int w) {
@@ -81,8 +66,8 @@ static void bend(int x1,int y1,int x2,int y2,int x3,int y3) {
 
 static void text(int x, int y, const wchar_t* s, int size = 16) {
     HFONT hFont = CreateFont(size, 0, 0, 0, FW_NORMAL, 0, 0, 0,
-                         DEFAULT_CHARSET, 0, 0, DEFAULT_QUALITY, 0,
-                         L"Microsoft YaHei");
+                            DEFAULT_CHARSET, 0, 0, DEFAULT_QUALITY, 0,
+                            L"Microsoft YaHei");
     HFONT oldFont = (HFONT)SelectObject(_hdc, hFont);
     SetTextColor(_hdc, _penColor);
     SetBkMode(_hdc, TRANSPARENT);
@@ -90,6 +75,7 @@ static void text(int x, int y, const wchar_t* s, int size = 16) {
     SelectObject(_hdc, oldFont);
     DeleteObject(hFont);
 }
+
 static void window(int w, int h, const wchar_t* title, void (*draw)()) {
     WNDCLASS wc = {0};
     wc.lpfnWndProc = _proc;
@@ -152,24 +138,28 @@ static void fullrect(int x1,int y1,int x2,int y2) {
         DeleteObject(b);
     }
 }
+
 static int mousex() {
     POINT p;
     GetCursorPos(&p);
     ScreenToClient(_hwnd, &p);
     return p.x;
 }
+
 static int mousey() {
     POINT p;
     GetCursorPos(&p);
     ScreenToClient(_hwnd, &p);
     return p.y;
 }
+
 static void circle(int x, int y, int r) {
     _applyPen();
     HBRUSH old = (HBRUSH)SelectObject(_hdc, GetStockObject(NULL_BRUSH));
     Ellipse(_hdc, x - r, y - r, x + r, y + r);
     SelectObject(_hdc, old);
 }
+
 static void fullcircle(int x, int y, int r) {
     if (!_useGrad) {
         _applyPen();
@@ -193,12 +183,15 @@ static void fullcircle(int x, int y, int r) {
         DeleteObject(b);
     }
 }
+
 static void nograd() {
     _useGrad = false;
 }
+
 static bool mousedown() {
     return GetAsyncKeyState(VK_LBUTTON) & 0x8000;
 }
+
 // 油漆桶填充：从(x,y)开始，把相连同色区域填成当前 color 颜色
 static void fill(int x, int y) {
     COLORREF target = GetPixel(_hdc, x, y);
