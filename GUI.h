@@ -58,41 +58,55 @@ static void bend(int x1,int y1,int x2,int y2,int x3,int y3) {
     }
 }
 
-// 文本：优先使用 "Microsoft YaHei"，若系统无该字体则回退到 DEFAULT_GUI_FONT
+// 文本：优先使用 Microsoft YaHei / SimHei 等中文字体，并确保 size 参数生效
 static void text(int x, int y, const wchar_t* s, int size = 16) {
+    int dpi = GetDeviceCaps(_hdc, LOGPIXELSY);
     LOGFONTW lf = {0};
-    lf.lfHeight = size;
+    lf.lfHeight = -MulDiv(size, dpi, 72);
     lf.lfWeight = FW_NORMAL;
     lf.lfCharSet = DEFAULT_CHARSET;
-    lf.lfQuality = DEFAULT_QUALITY;
-    wcscpy_s(lf.lfFaceName, L"Microsoft YaHei");
+    lf.lfQuality = CLEARTYPE_QUALITY;
 
-    HFONT hTry = CreateFontIndirectW(&lf);
-    // 先选入设备上下文，查询实际被选中的字族名，以判断系统是否支持该字体
-    HFONT hOld = (HFONT)SelectObject(_hdc, hTry);
-    wchar_t face[LF_FACESIZE] = {0};
-    GetTextFaceW(_hdc, LF_FACESIZE, face);
-    bool haveYaHei = (_wcsicmp(face, L"Microsoft YaHei") == 0 || _wcsicmp(face, L"Microsoft YaHei UI") == 0);
-    // 恢复之前的字体
+    const wchar_t* candidates[] = {
+        L"Microsoft YaHei",
+        L"Microsoft YaHei UI",
+        L"SimHei",
+        L"Arial",
+        L"Microsoft Sans Serif"
+    };
+
+    HFONT hFont = nullptr;
+    for (const wchar_t* name : candidates) {
+        wcscpy_s(lf.lfFaceName, name);
+        HFONT hTry = CreateFontIndirectW(&lf);
+        if (!hTry) continue;
+
+        HFONT hOld = (HFONT)SelectObject(_hdc, hTry);
+        wchar_t face[LF_FACESIZE] = {0};
+        GetTextFaceW(_hdc, LF_FACESIZE, face);
+        SelectObject(_hdc, hOld);
+
+        bool matched = (_wcsicmp(face, name) == 0);
+        if (matched) {
+            hFont = hTry;
+            break;
+        }
+
+        DeleteObject(hTry);
+    }
+
+    if (!hFont) {
+        hFont = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
+    }
+
+    HFONT hOld = (HFONT)SelectObject(_hdc, hFont);
+    SetTextColor(_hdc, _penColor);
+    SetBkMode(_hdc, TRANSPARENT);
+    TextOutW(_hdc, x, y, s, (int)wcslen(s));
     SelectObject(_hdc, hOld);
 
-    if (haveYaHei) {
-        // 使用我们创建的字体
-        HFONT hUse = (HFONT)SelectObject(_hdc, hTry);
-        SetTextColor(_hdc, _penColor);
-        SetBkMode(_hdc, TRANSPARENT);
-        TextOutW(_hdc, x, y, s, (int)wcslen(s));
-        SelectObject(_hdc, hUse);
-        DeleteObject(hTry);
-    } else {
-        // 没有微软雅黑，释放尝试的字体，使用系统默认 GUI 字体
-        DeleteObject(hTry);
-        HFONT def = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
-        HFONT prev = (HFONT)SelectObject(_hdc, def);
-        SetTextColor(_hdc, _penColor);
-        SetBkMode(_hdc, TRANSPARENT);
-        TextOutW(_hdc, x, y, s, (int)wcslen(s));
-        SelectObject(_hdc, prev);
+    if (hFont != (HFONT)GetStockObject(DEFAULT_GUI_FONT)) {
+        DeleteObject(hFont);
     }
 }
 static void window(int w, int h, const wchar_t* title, void (*draw)()) {
