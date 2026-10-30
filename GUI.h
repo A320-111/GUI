@@ -14,13 +14,57 @@ static int _lineWidth = 2;
 static COLORREF _gradColor = RGB(0,0,0);
 static bool _useGrad = false;
 
+// ----------------- 输入框状态 -----------------
+static wchar_t _inputText[256] = L"";
+static RECT _inputRect = { 0 };
+static bool _inputFocused = false;
+static int _inputMaxLen = 0;
+
 static void _applyPen() {
     DeleteObject(_pen);
     _pen = CreatePen(PS_SOLID, _lineWidth, _penColor);
     SelectObject(_hdc, _pen);
 }
 static LRESULT CALLBACK _proc(HWND h, UINT m, WPARAM wp, LPARAM lp) {
-    if (m == WM_DESTROY) PostQuitMessage(0);
+    if (m == WM_DESTROY) {
+        PostQuitMessage(0);
+        return 0;
+    }
+
+    if (m == WM_LBUTTONDOWN) {
+        POINT p;
+        p.x = LOWORD(lp);
+        p.y = HIWORD(lp);
+
+        if (PtInRect(&_inputRect, p)) {
+            _inputFocused = true;
+        } else {
+            _inputFocused = false;
+        }
+        return 0;
+    }
+
+    if (m == WM_CHAR && _inputFocused && _inputMaxLen > 0) {
+        wchar_t ch = (wchar_t)wp;
+        size_t len = wcslen(_inputText);
+
+        if (ch == VK_BACK) {
+            if (len > 0) _inputText[len - 1] = L'\0';
+            return 0;
+        }
+
+        if (ch == VK_RETURN || ch == VK_ESCAPE) {
+            _inputFocused = false;
+            return 0;
+        }
+
+        if (ch >= 32 && len + 1 < (size_t)_inputMaxLen) {
+            _inputText[len] = ch;
+            _inputText[len + 1] = L'\0';
+        }
+        return 0;
+    }
+
     return DefWindowProc(h, m, wp, lp);
 }
 static void gradcolor(int R, int G, int B) {
@@ -242,4 +286,54 @@ static void fill(int x, int y) {
         q.push({cx, cy+1});
         q.push({cx, cy-1});
     }
+}
+
+// ----------------- 输入框函数 -----------------
+static void inputbox(int x, int y, int w, int h, wchar_t* buffer, int maxLen, int fontSize = 16) {
+    if (buffer == nullptr || maxLen <= 0) return;
+
+    if (_inputText[0] == L'\0' && buffer[0] != L'\0') {
+        wcscpy_s(_inputText, 256, buffer);
+    }
+
+    _inputRect = { x, y, x + w, y + h };
+    _inputMaxLen = maxLen;
+
+    HBRUSH bgBrush = CreateSolidBrush(RGB(255, 255, 255));
+    RECT bgRect = { x, y, x + w, y + h };
+    FillRect(_hdc, &bgRect, bgBrush);
+    DeleteObject(bgBrush);
+
+    HPEN borderPen = CreatePen(PS_SOLID, 2, _inputFocused ? RGB(60, 120, 255) : RGB(180, 180, 180));
+    HPEN oldPen = (HPEN)SelectObject(_hdc, borderPen);
+    Rectangle(_hdc, x, y, x + w, y + h);
+    SelectObject(_hdc, oldPen);
+    DeleteObject(borderPen);
+
+    int dpi = GetDeviceCaps(_hdc, LOGPIXELSY);
+    LOGFONTW lf = {0};
+    lf.lfHeight = -MulDiv(fontSize, dpi, 72);
+    lf.lfWeight = FW_NORMAL;
+    lf.lfCharSet = DEFAULT_CHARSET;
+    lf.lfQuality = CLEARTYPE_QUALITY;
+
+    HFONT hFont = CreateFontIndirectW(&lf);
+    HFONT oldFont = (HFONT)SelectObject(_hdc, hFont);
+    SetBkMode(_hdc, TRANSPARENT);
+    SetTextColor(_hdc, RGB(0, 0, 0));
+
+    int padding = 8;
+    TextOutW(_hdc, x + padding, y + (h - fontSize) / 2, _inputText, (int)wcslen(_inputText));
+
+    if (_inputFocused) {
+        int caretX = x + padding + (int)(wcslen(_inputText) * (fontSize * 0.6f));
+        int caretY = y + 4;
+        MoveToEx(_hdc, caretX, caretY, NULL);
+        LineTo(_hdc, caretX, caretY + h - 8);
+    }
+
+    SelectObject(_hdc, oldFont);
+    DeleteObject(hFont);
+
+    wcscpy_s(buffer, maxLen, _inputText);
 }
