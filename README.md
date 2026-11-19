@@ -1,8 +1,6 @@
 # GUI
 
-一个基于 Win32 GDI/GDI+ 的轻量级 C++ 绘图头文件库。使用前在程序中包含 `GUI.h`，并在 `main()` 中调用 `window()` 创建窗口。绘图函数通常放在传给 `window()` 的绘图回调中。
-
-> 当前 `GUI.h` 中实际提供的接口使用小写名称，例如 `color()`、`line()`、`text()`。`setColor()`、`drawLine()`、`createWindow()` 等名称不是此版本头文件中的接口。
+一个基于 Windows GDI/GDI+ 的轻量级 C++ 图形库。所有坐标均以窗口客户区左上角为原点：X 向右增加，Y 向下增加。
 
 ## 快速开始
 
@@ -11,9 +9,11 @@
 
 void draw() {
     clear();
-    color(0, 0, 0);
+
+    color(20, 20, 20);
     width(3);
-    line(30, 40, 250, 40);
+    line(30, 40, 300, 40);
+
     text(30, 70, L"Hello GUI", 24);
 }
 
@@ -23,85 +23,69 @@ int main() {
 }
 ```
 
-图片选择框和图片显示使用 GDI+，已经在 `GUI.h` 里初始化。Visual Studio 使用头文件中的自动链接声明；MinGW 通常需要链接 `-lgdiplus -lcomdlg32`。
+使用图片路径加载接口时，包含 `Image.h`：
 
-## 窗口与清屏
+```cpp
+#include "Image.h"
 
-| 函数 | 功能 |
-| --- | --- |
-| `window(int w, int h, const wchar_t* title, void (*draw)())` | 创建指定宽高和标题的窗口，并在窗口运行期间反复调用 `draw`。绘图函数应放在回调中。窗口关闭后返回。 |
-| `clear()` | 用当前背景色清空整个绘图区域。每帧重绘时可先调用它。 |
+void draw() {
+    clear();
+    image(L"assets/photo.png", 50, 50, 400, 300);
+}
 
-## 颜色与线条
+int main() {
+    window(800, 600, L"图片示例", draw);
+    clearImageCache();
+    return 0;
+}
+```
 
-| 函数 | 功能 |
-| --- | --- |
-| `color(int R, int G, int B, bool setBackground = false)` | 设置当前绘图颜色，RGB 分量范围为 0–255。第三个可选参数设为 `true` 时，同时把该颜色设为 `clear()` 使用的背景色。 |
-| `width(int w)` | 设置线宽，影响后续线条和未填充图形的边框。 |
-| `gradcolor(int R, int G, int B)` | 打开渐变填充，并设置渐变终点颜色；渐变从当前 `color()` 颜色过渡到这里设置的颜色。 |
-| `nograd()` | 关闭渐变填充。 |
-| `line(int x1, int y1, int x2, int y2)` | 从 `(x1, y1)` 绘制到 `(x2, y2)` 的直线。 |
-| `bend(int x1, int y1, int x2, int y2, int x3, int y3)` | 绘制一条由三个控制点生成的曲线，按 `(x1,y1)`、`(x2,y2)`、`(x3,y3)` 指定路径控制点。 |
+`Image.h` 已包含 `GUI.h`，不要同时重复包含两者。
 
-## 形状与填充
-
-| 函数 | 功能 |
-| --- | --- |
-| `rect(int x1, int y1, int x2, int y2)` | 绘制左上角到右下角为 `(x1,y1)`、`(x2,y2)` 的空心矩形。 |
-| `fullrect(int x1, int y1, int x2, int y2)` | 绘制填充矩形。普通模式使用当前颜色；调用 `gradcolor()` 后使用从当前颜色到渐变终点色的纵向渐变。 |
-| `circle(int x, int y, int r)` | 以 `(x,y)` 为圆心、`r` 为半径绘制空心圆。 |
-| `fullcircle(int x, int y, int r)` | 绘制填充圆；启用渐变后按纵向渐变填充。 |
-| `fill(int x, int y)` | 油漆桶填充：从指定点开始，将画布上相连的同色区域替换为当前 `color()` 颜色。 |
-
-## 文字
+## 窗口与绘图环境
 
 | 函数 | 功能 |
 | --- | --- |
-| `text(int x, int y, const wchar_t* s, int size = 16)` | 在 `(x,y)` 绘制宽字符串（使用 `L"..."` 字面量），`size` 为字号；优先尝试微软雅黑、黑体等字体。文字颜色使用当前绘图颜色。 |
+| `window(w, h, title, draw)` | 创建宽 `w`、高 `h`、标题为 `title` 的窗口，并反复调用绘图回调 `draw`。窗口关闭时结束循环。 |
+| `clear()` | 使用当前背景色清空整个窗口客户区。建议每帧重绘前先调用。 |
+
+## 颜色与画笔
+
+| 函数 | 功能 |
+| --- | --- |
+| `color(R, G, B, setBackground = false)` | 设置当前绘图颜色。`R/G/B` 的范围是 0–255；传入 `true` 时，同时把该颜色设为背景色。 |
+| `width(w)` | 设置后续直线、曲线和空心图形的线宽。 |
+| `gradcolor(R, G, B)` | 启用渐变并设置终点颜色。填充图形会从当前 `color()` 颜色渐变到此颜色。 |
+| `nograd()` | 关闭渐变填充。后续填充矩形和填充圆恢复为纯色。 |
+
+## 基本绘图
+
+| 函数 | 功能 |
+| --- | --- |
+| `line(x1, y1, x2, y2)` | 绘制一条直线。 |
+| `bend(x1, y1, x2, y2, x3, y3)` | 绘制由三个控制点组成的曲线。 |
+| `text(x, y, text, size = 16)` | 在指定位置绘制宽字符串；使用中文或特殊字符时请使用 `L"文字"`。文字颜色为当前画笔颜色。 |
+| `rect(x1, y1, x2, y2)` | 绘制空心矩形。 |
+| `fullrect(x1, y1, x2, y2)` | 绘制纯色或渐变填充矩形。 |
+| `circle(x, y, r)` | 绘制空心圆。 |
+| `fullcircle(x, y, r)` | 绘制纯色或渐变填充圆。 |
+| `fill(x, y)` | 在指定点处执行油漆桶填充；把与该点相连且颜色相同的区域改为当前颜色。 |
 
 ## 鼠标
 
 | 函数 | 功能 |
 | --- | --- |
-| `mousex()` | 返回鼠标指针在窗口客户区中的 X 坐标。 |
-| `mousey()` | 返回鼠标指针在窗口客户区中的 Y 坐标。 |
-| `mousedown()` | 左键按下期间返回 `true`，否则返回 `false`。 |
+| `mousex()` | 返回鼠标在窗口客户区中的 X 坐标。 |
+| `mousey()` | 返回鼠标在窗口客户区中的 Y 坐标。 |
+| `mousedown()` | 左键按下时返回 `true`，松开时返回 `false`。 |
 
-## 图片选择与显示
-
-| 函数 | 功能 |
-| --- | --- |
-| `imagebox(int x, int y, int w, int h)` | 在指定矩形区域绘制图片框。点击框后打开系统文件选择对话框，选取本地图片并在框内按比例缩放显示。支持 PNG、JPEG、BMP、GIF、TIFF。 |
-
-示例：
-
-```cpp
-#include "GUI.h"
-
-void draw() {
-    clear();
-    imagebox(50, 50, 400, 300); // 点击框选择本地图片
-}
-
-int main() {
-    window(800, 600, L"图片选择示例", draw);
-    return 0;
-}
-```
-
-这里的“选择图片”是从本地文件系统读取并显示，不会将图片上传到网络。当前实现只有一个图片框状态；多次调用 `imagebox()` 时，点击区域是最近一次绘制的图片框。
-
-## 输入框
+## 文本输入
 
 | 函数 | 功能 |
 | --- | --- |
-| `inputbox(int x, int y, int w, int h, wchar_t* buffer, int maxLen, int fontSize = 16)` | 绘制并启用一个文本输入框。点击框后可键入文字，退格删除，回车或 Esc 结束输入；文本同步写入 `buffer`。`buffer` 必须是可写的宽字符数组，建议 `maxLen` 不超过 256，且不得超过数组容量。 |
-
-示例：
+| `inputbox(x, y, w, h, buffer, maxLen, fontSize = 16)` | 绘制文本输入框并接收键盘输入。点击框后可输入，退格删除，回车或 Esc 结束焦点。输入内容同步写入 `buffer`。 |
 
 ```cpp
-#include "GUI.h"
-
 wchar_t name[64] = L"";
 
 void draw() {
@@ -116,8 +100,90 @@ int main() {
 }
 ```
 
-## 说明
+注意：`buffer` 必须指向可写的宽字符数组，`maxLen` 和数组容量应保持一致。内部最多使用 256 个字符的输入缓冲，因此建议数组容量不超过 256。
 
-- 坐标原点 `(0,0)` 在窗口客户区左上角，X 向右增加，Y 向下增加。
-- 颜色、画笔宽度等设置会影响之后绘制的图形。
-- `_proc`、`_applyPen` 及以下划线开头的全局变量属于内部实现细节，不是供调用的绘图接口。
+## 图片选择与图片加载
+
+### 通过文件选择框加载
+
+| 函数 | 功能 |
+| --- | --- |
+| `imagebox(x, y, w, h)` | 绘制图片选择区域。点击区域会打开系统文件选择框；选取图片后按比例缩放并居中显示在框内。 |
+
+支持 PNG、JPEG、BMP、GIF 和 TIFF。此功能只读取本地文件，不会上传到网络。
+
+```cpp
+#include "GUI.h"
+
+void draw() {
+    clear();
+    imagebox(50, 50, 400, 300);
+}
+
+int main() {
+    window(800, 600, L"图片选择示例", draw);
+    return 0;
+}
+```
+
+### 通过代码指定路径加载
+
+| 函数 | 功能 |
+| --- | --- |
+| `image(path, x, y, w, h)` | 从指定路径加载图片并按比例缩放、居中绘制到矩形区域。加载成功返回 `true`，失败返回 `false`。同一路径会被缓存以减少重复读取。 |
+| `clearImageCache()` | 释放 `image()` 创建的图片缓存。通常在窗口关闭后调用。 |
+
+相对路径以进程的当前工作目录为基准；也可以使用绝对宽字符串路径。
+
+```cpp
+#include "Image.h"
+
+void draw() {
+    clear();
+
+    if (!image(L"assets/photo.png", 50, 50, 400, 300)) {
+        text(50, 360, L"图片加载失败", 18);
+    }
+}
+
+int main() {
+    window(800, 600, L"图片路径示例", draw);
+    clearImageCache();
+    return 0;
+}
+```
+
+Windows 绝对路径示例：
+
+```cpp
+image(L"C:\\Users\\Alice\\Pictures\\photo.jpg", 50, 50, 400, 300);
+```
+
+## 编译要求
+
+`GUI.h` 使用 Windows API、Common Dialog 和 GDI+。它已包含可直接使用的 Visual Studio 链接声明：
+
+- `Comdlg32.lib`
+- `Gdiplus.lib`
+
+如果使用 MinGW 等工具链，链接时可使用：
+
+```text
+-lgdiplus -lcomdlg32
+```
+
+## 内部实现说明
+
+以下名称属于当前头文件的内部实现，不建议作为公开 API 使用：
+
+- `_proc`
+- `_applyPen`
+- `_hwnd`
+- `_hdc`
+- `_pen`
+- `_inputText`
+- `_uploadedImage`
+- `_gdiplusToken`
+- `_imageCache`
+
+以后如果调整内部实现，这些名称可能发生变化。
