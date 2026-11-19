@@ -7,6 +7,8 @@
 #include <cmath>
 #include <queue>
 #include <string>
+#include <utility>
+#include <vector>
 
 #pragma comment(lib, "Comdlg32.lib")
 #pragma comment(lib, "Gdiplus.lib")
@@ -25,6 +27,9 @@ static RECT _imageBoxRect = { 0 };
 static Gdiplus::Bitmap* _uploadedImage = nullptr;
 static ULONG_PTR _gdiplusToken = 0;
 static bool _gdiplusReady = false;
+
+// 按图片路径加载并缓存的图片。
+static std::vector<std::pair<std::wstring, Gdiplus::Bitmap*>> _imageCache;
 
 // ----------------- 输入框状态 -----------------
 static wchar_t _inputText[256] = L"";
@@ -226,6 +231,7 @@ static void window(int w, int h, const wchar_t* title, void (*draw)()) {
         if (running) draw();
     }
 
+    clearImageCache();
     delete _uploadedImage;
     _uploadedImage = nullptr;
     ReleaseDC(_hwnd, _hdc);
@@ -258,7 +264,6 @@ static void fullrect(int x1,int y1,int x2,int y2) {
         DeleteObject(b);
         return;
     }
-    // 渐变版：y 方向从 color 渐变到 gc
     int height = y2 - y1;
     if (height <= 0) return;
     for (int y = 0; y < height; y++) {
@@ -300,7 +305,6 @@ static void fullcircle(int x, int y, int r) {
         DeleteObject(b);
         return;
     }
-    // 逐行扫描，从上到下，每行渐变色填充
     for (int dy = -r; dy <= r; dy++) {
         int half = (int)sqrt((double)(r*r - dy*dy));
         float t = (float)(dy + r) / (2*r);
@@ -382,6 +386,53 @@ static void imagebox(int x, int y, int w, int h) {
     SelectObject(_hdc, oldBrush);
     SelectObject(_hdc, oldPen);
     DeleteObject(border);
+}
+
+// 通过指定路径直接加载并显示图片。
+static bool image(const wchar_t* path, int x, int y, int w, int h) {
+    if (!path || !*path || w <= 0 || h <= 0 || !_gdiplusReady || !_hdc)
+        return false;
+
+    Gdiplus::Bitmap* bitmap = nullptr;
+    for (const auto& item : _imageCache) {
+        if (item.first == path) {
+            bitmap = item.second;
+            break;
+        }
+    }
+
+    if (!bitmap) {
+        bitmap = Gdiplus::Bitmap::FromFile(path, FALSE);
+        if (!bitmap || bitmap->GetLastStatus() != Gdiplus::Ok) {
+            delete bitmap;
+            return false;
+        }
+        _imageCache.push_back({ std::wstring(path), bitmap });
+    }
+
+    UINT srcW = bitmap->GetWidth();
+    UINT srcH = bitmap->GetHeight();
+    if (srcW == 0 || srcH == 0)
+        return false;
+
+    double scale = (std::min)(static_cast<double>(w) / srcW,
+                              static_cast<double>(h) / srcH);
+    int drawW = static_cast<int>(srcW * scale);
+    int drawH = static_cast<int>(srcH * scale);
+    int drawX = x + (w - drawW) / 2;
+    int drawY = y + (h - drawH) / 2;
+
+    Gdiplus::Graphics graphics(_hdc);
+    graphics.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
+    graphics.SetSmoothingMode(Gdiplus::SmoothingModeHighQuality);
+    return graphics.DrawImage(bitmap, drawX, drawY, drawW, drawH) == Gdiplus::Ok;
+}
+
+// 释放 image() 缓存的图片。
+static void clearImageCache() {
+    for (auto& item : _imageCache)
+        delete item.second;
+    _imageCache.clear();
 }
 
 // ----------------- 输入框函数 -----------------
