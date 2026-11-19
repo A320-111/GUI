@@ -28,7 +28,7 @@ static Gdiplus::Bitmap* _uploadedImage = nullptr;
 static ULONG_PTR _gdiplusToken = 0;
 static bool _gdiplusReady = false;
 
-// 按图片路径加载并缓存的图片。
+// image() 按路径缓存的图片，窗口关闭时由 window() 自动释放。
 static std::vector<std::pair<std::wstring, Gdiplus::Bitmap*>> _imageCache;
 
 // ----------------- 输入框状态 -----------------
@@ -231,7 +231,9 @@ static void window(int w, int h, const wchar_t* title, void (*draw)()) {
         if (running) draw();
     }
 
-    clearImageCache();
+    // 图片资源在 GDI+ 关闭前自动释放，不需要额外的清理函数。
+    for (auto& item : _imageCache) delete item.second;
+    _imageCache.clear();
     delete _uploadedImage;
     _uploadedImage = nullptr;
     ReleaseDC(_hwnd, _hdc);
@@ -388,7 +390,7 @@ static void imagebox(int x, int y, int w, int h) {
     DeleteObject(border);
 }
 
-// 通过指定路径直接加载并显示图片。
+// 通过指定路径直接加载并显示图片。按比例缩放并居中绘制；加载或绘制失败时返回 false。
 static bool image(const wchar_t* path, int x, int y, int w, int h) {
     if (!path || !*path || w <= 0 || h <= 0 || !_gdiplusReady || !_hdc)
         return false;
@@ -426,13 +428,6 @@ static bool image(const wchar_t* path, int x, int y, int w, int h) {
     graphics.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
     graphics.SetSmoothingMode(Gdiplus::SmoothingModeHighQuality);
     return graphics.DrawImage(bitmap, drawX, drawY, drawW, drawH) == Gdiplus::Ok;
-}
-
-// 释放 image() 缓存的图片。
-static void clearImageCache() {
-    for (auto& item : _imageCache)
-        delete item.second;
-    _imageCache.clear();
 }
 
 // ----------------- 输入框函数 -----------------
